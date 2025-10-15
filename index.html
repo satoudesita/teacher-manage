@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>test</title>
+  <style>
+    .tab {
+      display: inline-block;
+      padding: 10px 20px;
+      cursor: pointer;
+      background: #eee;
+      margin-right: 5px;
+      border-radius: 5px 5px 0 0;
+    }
+
+    .tab.active {
+      background: #fff;
+      border-bottom: 2px solid #fff;
+    }
+
+    .tab-content {
+      display: none;
+      border: 1px solid #ccc;
+      padding: 10px;
+      background: #fff;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    th,
+    td {
+      border: 1px solid #ccc;
+      padding: 5px;
+    }
+
+    #loginScreen {
+      max-width: 400px;
+      margin: 40px auto;
+      padding: 30px;
+      background: #f9f9f9;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    #logoutBtn {
+      margin: 20px 0;
+      background: #ff7043;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+
+    #logoutBtn:hover {
+      background: #e64a19;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="loginScreen">
+    <h2>先生ログイン</h2>
+    <input type="text" id="teacherUsername" placeholder="先生ユーザー名" />
+    <input type="password" id="teacherPassword" placeholder="パスワード" />
+    <button onclick="teacherLogin()">ログイン</button>
+    <h3>先生新規登録</h3>
+    <input type="text" id="newTeacherUsername" placeholder="先生ユーザー名" />
+    <input type="password" id="newTeacherPassword" placeholder="パスワード" />
+    <button onclick="teacherRegister()">登録</button>
+    <p id="loginResult"></p>
+  </div>
+
+  <div id="mainContent" style="display:none;">
+    <button id="logoutBtn" onclick="teacherLogout()">ログアウト</button>
+    <div>
+      <span class="tab active" id="mainTab" onclick="showTab('main')">常時データ</span>
+      <span class="tab" id="lateTab" onclick="showTab('late')">遅刻データ</span>
+    </div>
+    <div id="main" class="tab-content active">
+      <h3>常時データ</h3>
+      <input type="date" id="mainDate" placeholder="date">
+      <input type="text" id="mainName" placeholder="name">
+      <button onclick="mainSearch()">検索</button>
+      <table id="mainTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- データがここに入る -->
+        </tbody>
+      </table>
+    </div>
+    <div id="late" class="tab-content">
+      <h3>遅刻データ</h3>
+      <input type="date" id="lateDate" placeholder="date">
+      <input type="text" id="lateName" placeholder="name">
+      <button onclick="lateSearch()">検索</button>
+      <table id="lateTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- データがここに入る -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    const baserow = {
+      url: "https://api.baserow.io/api/database/rows/table/685053/",
+      lateurl: "https://api.baserow.io/api/database/rows/table/691308/",
+      token: "Token z8Du55WVQi6wmFT3Ta6diQUSUxCqx8WR"
+    }
+
+    // 先生用ユーザー管理
+    function getTeachers() {
+      return JSON.parse(localStorage.getItem("TEACHERS") || "{}");
+    }
+
+    function saveTeachers(teachers) {
+      localStorage.setItem("TEACHERS", JSON.stringify(teachers));
+    }
+
+    async function hashPassword(password) {
+      const enc = new TextEncoder().encode(password);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", enc);
+      return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    async function teacherRegister() {
+      const newTeacher = document.getElementById("newTeacherUsername").value;
+      const newPass = document.getElementById("newTeacherPassword").value;
+      const teachers = getTeachers();
+      if (teachers[newTeacher]) {
+        document.getElementById("loginResult").textContent = "すでに登録されています";
+        return;
+      }
+      const hashed = await hashPassword(newPass);
+      teachers[newTeacher] = hashed;
+      saveTeachers(teachers);
+      document.getElementById("loginResult").textContent = "先生登録完了";
+    }
+
+    async function teacherLogin() {
+      const username = document.getElementById("teacherUsername").value;
+      const password = document.getElementById("teacherPassword").value;
+      const teachers = getTeachers();
+      const hashed = await hashPassword(password);
+      if (teachers[username] && teachers[username] === hashed) {
+        localStorage.setItem("loggedInTeacher", username);
+        showMainContent();
+      } else {
+        document.getElementById("loginResult").textContent = "ユーザー名またはパスワードが違います";
+      }
+    }
+
+    function teacherLogout() {
+      if (confirm("本当にログアウトしますか？")) {
+        localStorage.removeItem("loggedInTeacher");
+        location.reload();
+      }
+    }
+
+    function showMainContent() {
+      document.getElementById("loginScreen").style.display = "none";
+      document.getElementById("mainContent").style.display = "block";
+      fetchAndDisplay(baserow.url, 'mainTable');
+      fetchAndDisplay(baserow.lateurl, 'lateTable');
+    }
+
+    function showTab(tab) {
+      document.getElementById('main').classList.remove('active');
+      document.getElementById('late').classList.remove('active');
+      document.getElementById('mainTab').classList.remove('active');
+      document.getElementById('lateTab').classList.remove('active');
+      document.getElementById(tab).classList.add('active');
+      document.getElementById(tab + 'Tab').classList.add('active');
+    }
+
+    async function fetchAndDisplay(url, tableId, date = '', name = '') {
+      let query = '?user_field_names=true';
+      if (date) {
+        query += `&filter__Date__equal=${date}`;
+      }
+      if (name) {
+        query += `&filter__Name__equal=${name}`;
+      }
+      let res = await fetch(url + query, {
+        method: 'GET',
+        headers: {
+          'Authorization': baserow.token,
+          'Content-Type': 'application/json',
+        },
+      });
+      let json = await res.json();
+      let rows = json.results || [];
+      let tbody = document.querySelector(`#${tableId} tbody`);
+      tbody.innerHTML = '';
+      rows.forEach(row => {
+        let tr = document.createElement('tr');
+        tr.innerHTML = `<td>${row.id}</td><td>${row.Name || ''}</td><td>${row.Date || ''}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // 検索ボタン用
+    async function mainSearch() {
+      const date = document.getElementById('mainDate').value;
+      const name = document.getElementById('mainName').value;
+      await fetchAndDisplay(
+        baserow.url,
+        'mainTable',
+        date ? new Date(date).toLocaleDateString() : '',
+        name
+      );
+    }
+
+    async function lateSearch() {
+      const date = document.getElementById('lateDate').value;
+      const name = document.getElementById('lateName').value;
+      await fetchAndDisplay(
+        baserow.lateurl,
+        'lateTable',
+        date ? new Date(date).toLocaleDateString() : '',
+        name
+      );
+    }
+
+    // ページロード時ログイン状態確認
+    window.onload = function () {
+      const teacher = localStorage.getItem("loggedInTeacher");
+      if (teacher) {
+        showMainContent();
+      }
+    }
+  </script>
+</body>
+
+</html>

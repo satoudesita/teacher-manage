@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>test</title>
+  <style>
+    .tab {
+      display: inline-block;
+      padding: 10px 20px;
+      cursor: pointer;
+      background: #eee;
+      margin-right: 5px;
+      border-radius: 5px 5px 0 0;
+    }
+
+    .tab.active {
+      background: #fff;
+      border-bottom: 2px solid #fff;
+    }
+
+    .tab-content {
+      display: none;
+      border: 1px solid #ccc;
+      padding: 10px;
+      background: #fff;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    th,
+    td {
+      border: 1px solid #ccc;
+      padding: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <div>
+    <span class="tab active" id="mainTab" onclick="showTab('main')">常時データ</span>
+    <span class="tab" id="lateTab" onclick="showTab('late')">遅刻データ</span>
+  </div>
+  <div id="main" class="tab-content active">
+    <h3>常時データ</h3>
+    <input type="date" id="mainDate" placeholder="date">
+    <input type="text" id="mainName" placeholder="name">
+    <button onclick="mainSearch()">検索</button>
+    <table id="mainTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- データがここに入る -->
+      </tbody>
+    </table>
+  </div>
+  <div id="late" class="tab-content">
+    <h3>遅刻データ</h3>
+    <input type="date" id="lateDate" placeholder="date">
+    <input type="text" id="lateName" placeholder="name">
+    <button onclick="lateSearch()">検索</button>
+    <table id="lateTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- データがここに入る -->
+      </tbody>
+    </table>
+  </div>
+  <script>
+    const baserow = {
+      url: "https://api.baserow.io/api/database/rows/table/685053/",
+      lateurl: "https://api.baserow.io/api/database/rows/table/691308/",
+      token: "Token z8Du55WVQi6wmFT3Ta6diQUSUxCqx8WR"
+    }
+
+    function showTab(tab) {
+      document.getElementById('main').classList.remove('active');
+      document.getElementById('late').classList.remove('active');
+      document.getElementById('mainTab').classList.remove('active');
+      document.getElementById('lateTab').classList.remove('active');
+      document.getElementById(tab).classList.add('active');
+      document.getElementById(tab + 'Tab').classList.add('active');
+    }
+
+    async function fetchAndDisplay(url, tableId, date = '', name = '') {
+      let query = '?user_field_names=true';
+      if (date) {
+        query += `&filter__Date__equal=${date}`;
+      }
+      if (name) {
+        query += `&filter__Name__equal=${name}`;
+      }
+      let res = await fetch(url + query, {
+        method: 'GET',
+        headers: {
+          'Authorization': baserow.token,
+          'Content-Type': 'application/json',
+        },
+      });
+      let json = await res.json();
+      let rows = json.results || [];
+      let tbody = document.querySelector(`#${tableId} tbody`);
+      tbody.innerHTML = '';
+      rows.forEach(row => {
+        let tr = document.createElement('tr');
+        tr.innerHTML = `<td>${row.id}</td><td>${row.Name || ''}</td><td>${row.Date || ''}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // 検索ボタン用
+    async function mainSearch() {
+      const date = document.getElementById('mainDate').value;
+      const name = document.getElementById('mainName').value;
+      await fetchAndDisplay(
+        baserow.url,
+        'mainTable',
+        date ? new Date(date).toLocaleDateString() : '',
+        name
+      );
+    }
+
+    async function lateSearch() {
+      const date = document.getElementById('lateDate').value;
+      const name = document.getElementById('lateName').value;
+      await fetchAndDisplay(
+        baserow.lateurl,
+        'lateTable',
+        date ? new Date(date).toLocaleDateString() : '',
+        name
+      );
+    }
+
+    // 初期表示
+    fetchAndDisplay(baserow.url, 'mainTable');
+    fetchAndDisplay(baserow.lateurl, 'lateTable');
+  </script>
+</body>
+
+</html>
