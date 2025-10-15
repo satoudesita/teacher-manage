@@ -1,30 +1,194 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>test</title>
+  <title>データ管理</title>
   <style>
+    body {
+      font-family: 'Helvetica', 'Segoe UI', 'Meiryo', 'Arial', sans-serif;
+      background-color: #e3f2fd;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    .container {
+      background: #fff;
+      padding: 32px 24px;
+      border-radius: 14px;
+      box-shadow: 0 4px 16px rgba(33, 150, 243, 0.10);
+      width: 95vw;
+      max-width: 480px;
+      margin: 40px auto;
+      font-family: inherit;
+    }
+
+    h2,
+    h3 {
+      text-align: center;
+      color: #1976d2;
+      font-weight: 600;
+      margin-bottom: 18px;
+      font-family: inherit;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      border: 1px solid #90caf9;
+      border-radius: 8px;
+      box-sizing: border-box;
+      font-size: 16px;
+      font-family: inherit;
+      background: #e3f2fd;
+      transition: border-color 0.2s;
+    }
+
+    input:focus {
+      border-color: #1976d2;
+      outline: none;
+    }
+
+    button {
+      width: 100%;
+      background-color: #42a5f5;
+      color: white;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      margin: 10px 0;
+      cursor: pointer;
+      font-size: 16px;
+      font-family: inherit;
+      font-weight: 500;
+      box-shadow: 0 2px 8px rgba(33, 150, 243, 0.08);
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background-color: #1976d2;
+    }
+
+    #loginResult {
+      color: #1976d2;
+      text-align: center;
+      margin-top: 10px;
+      font-family: inherit;
+    }
+
+    #mainContent {
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 32px 24px;
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 4px 16px rgba(33, 150, 243, 0.10);
+      font-family: inherit;
+      position: relative;
+    }
+
+    .settings-btn {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background-color: #1976d2;
+      color: #fff;
+      border: none;
+      font-size: 22px;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(33, 150, 243, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .settings-btn:hover {
+      background-color: #42a5f5;
+    }
+
+    #settingsModal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(33, 150, 243, 0.08);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #settingsModal .modal-content {
+      background: #fff;
+      padding: 32px 24px;
+      border-radius: 14px;
+      box-shadow: 0 4px 24px rgba(33, 150, 243, 0.18);
+      min-width: 280px;
+      max-width: 90vw;
+      text-align: center;
+      font-family: inherit;
+    }
+
+    #logoutBtn {
+      background-color: #ff7043;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 0;
+      cursor: pointer;
+      font-size: 16px;
+      font-family: inherit;
+      font-weight: 500;
+      box-shadow: 0 2px 8px rgba(33, 150, 243, 0.08);
+      transition: background 0.2s;
+      margin-bottom: 12px;
+      width: 100%;
+    }
+
+    #logoutBtn:hover {
+      background-color: #e64a19;
+    }
+
     .tab {
       display: inline-block;
-      padding: 10px 20px;
+      padding: 10px 24px;
       cursor: pointer;
-      background: #eee;
+      background: #e3f2fd;
       margin-right: 5px;
-      border-radius: 5px 5px 0 0;
+      border-radius: 8px 8px 0 0;
+      font-size: 17px;
+      font-family: inherit;
+      font-weight: 500;
+      color: #1976d2;
+      border: none;
+      transition: background 0.2s, color 0.2s;
     }
 
     .tab.active {
-      background: #fff;
+      background: #1976d2;
+      color: #fff;
       border-bottom: 2px solid #fff;
     }
 
     .tab-content {
       display: none;
-      border: 1px solid #ccc;
-      padding: 10px;
-      background: #fff;
+      border: 1px solid #90caf9;
+      padding: 18px;
+      background: #e3f2fd;
+      border-radius: 0 0 12px 12px;
+      font-family: inherit;
+      margin-bottom: 24px;
     }
 
     .tab-content.active {
@@ -34,41 +198,77 @@
     table {
       border-collapse: collapse;
       width: 100%;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      font-family: inherit;
+      margin-top: 12px;
     }
 
     th,
     td {
-      border: 1px solid #ccc;
-      padding: 5px;
+      border: 1px solid #90caf9;
+      padding: 10px;
+      text-align: center;
+      font-size: 16px;
+      font-family: inherit;
     }
 
-    #loginScreen {
-      max-width: 400px;
-      margin: 40px auto;
-      padding: 30px;
-      background: #f9f9f9;
-      border-radius: 10px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    th {
+      background: #bbdefb;
+      color: #1976d2;
+      font-weight: 600;
     }
 
-    #logoutBtn {
-      margin: 20px 0;
-      background: #ff7043;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      padding: 10px 20px;
-      cursor: pointer;
+    input[type="date"],
+    input[type="text"] {
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid #90caf9;
+      margin-right: 8px;
+      font-family: inherit;
+      font-size: 15px;
+      background: #fff;
+      transition: border-color 0.2s;
     }
 
-    #logoutBtn:hover {
-      background: #e64a19;
+    input[type="date"]:focus,
+    input[type="text"]:focus {
+      border-color: #1976d2;
+      outline: none;
+    }
+
+    @media (max-width: 600px) {
+      #mainContent,
+      .container {
+        padding: 12px 4px;
+        max-width: 99vw;
+      }
+
+      th,
+      td {
+        font-size: 13px;
+        padding: 6px;
+      }
+
+      .tab {
+        padding: 8px 12px;
+        font-size: 15px;
+      }
+
+      .settings-btn {
+        top: 12px;
+        right: 12px;
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
+      }
     }
   </style>
 </head>
 
 <body>
-  <div id="loginScreen">
+  <div class="container" id="loginScreen">
     <h2>先生ログイン</h2>
     <input type="text" id="teacherUsername" placeholder="先生ユーザー名" />
     <input type="password" id="teacherPassword" placeholder="パスワード" />
@@ -81,22 +281,21 @@
   </div>
 
   <div id="mainContent" style="display:none;">
-    <button id="logoutBtn" onclick="teacherLogout()">ログアウト</button>
-    <div>
-      <span class="tab active" id="mainTab" onclick="showTab('main')">常時データ</span>
+    <button class="settings-btn" onclick="openSettings()" title="設定">&#9881;</button>
+    <div style="margin-bottom: 18px;">
+      <span class="tab active" id="mainTab" onclick="showTab('main')">生徒データ</span>
       <span class="tab" id="lateTab" onclick="showTab('late')">遅刻データ</span>
     </div>
     <div id="main" class="tab-content active">
-      <h3>常時データ</h3>
+      <h3 style="color:#1976d2;">生徒データ</h3>
       <input type="date" id="mainDate" placeholder="date">
       <input type="text" id="mainName" placeholder="name">
-      <button onclick="mainSearch()">検索</button>
+      <button onclick="mainSearch()" style="background:#1976d2;color:#fff;border:none;border-radius:6px;padding:8px 16px;">検索</button>
       <table id="mainTable">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Name</th>
             <th>Date</th>
+            <th>Name</th>
           </tr>
         </thead>
         <tbody>
@@ -105,16 +304,16 @@
       </table>
     </div>
     <div id="late" class="tab-content">
-      <h3>遅刻データ</h3>
+      <h3 style="color:#1976d2;">遅刻データ</h3>
       <input type="date" id="lateDate" placeholder="date">
       <input type="text" id="lateName" placeholder="name">
-      <button onclick="lateSearch()">検索</button>
+      <button onclick="lateSearch()" style="background:#1976d2;color:#fff;border:none;border-radius:6px;padding:8px 16px;">検索</button>
       <table id="lateTable">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Name</th>
             <th>Date</th>
+            <th>Name</th>
+            <th>Reason</th>
           </tr>
         </thead>
         <tbody>
@@ -123,6 +322,15 @@
       </table>
     </div>
   </div>
+
+  <div id="settingsModal">
+    <div class="modal-content">
+      <h3>設定</h3>
+      <button id="logoutBtn" onclick="teacherLogout()">ログアウト</button>
+      <button onclick="closeSettings()">閉じる</button>
+    </div>
+  </div>
+
   <script>
     const baserow = {
       url: "https://api.baserow.io/api/database/rows/table/685053/",
@@ -175,7 +383,9 @@
     function teacherLogout() {
       if (confirm("本当にログアウトしますか？")) {
         localStorage.removeItem("loggedInTeacher");
-        location.reload();
+        document.getElementById("mainContent").style.display = "none";
+        document.getElementById("settingsModal").style.display = "none";
+        document.getElementById("loginScreen").style.display = "block";
       }
     }
 
@@ -214,11 +424,20 @@
       let rows = json.results || [];
       let tbody = document.querySelector(`#${tableId} tbody`);
       tbody.innerHTML = '';
-      rows.forEach(row => {
-        let tr = document.createElement('tr');
-        tr.innerHTML = `<td>${row.id}</td><td>${row.Name || ''}</td><td>${row.Date || ''}</td>`;
-        tbody.appendChild(tr);
-      });
+      // 表のカラムに合わせて表示
+      if (tableId === 'mainTable') {
+        rows.forEach(row => {
+          let tr = document.createElement('tr');
+          tr.innerHTML = `<td>${row.Date || ''}</td><td>${row.Name || ''}</td>`;
+          tbody.appendChild(tr);
+        });
+      } else if (tableId === 'lateTable') {
+        rows.forEach(row => {
+          let tr = document.createElement('tr');
+          tr.innerHTML = `<td>${row.Date || ''}</td><td>${row.Name || ''}</td><td>${row.Reason || ''}</td>`;
+          tbody.appendChild(tr);
+        });
+      }
     }
 
     // 検索ボタン用
@@ -244,8 +463,17 @@
       );
     }
 
+    // 設定モーダル表示・非表示
+    function openSettings() {
+      document.getElementById("settingsModal").style.display = "flex";
+    }
+
+    function closeSettings() {
+      document.getElementById("settingsModal").style.display = "none";
+    }
+
     // ページロード時ログイン状態確認
-    window.onload = function () {
+    window.onload = function() {
       const teacher = localStorage.getItem("loggedInTeacher");
       if (teacher) {
         showMainContent();
