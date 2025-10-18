@@ -287,6 +287,7 @@
       <span class="tab active" id="mainTab" onclick="showTab('main')">生徒データ</span>
       <span class="tab" id="lateTab" onclick="showTab('late')">遅刻データ</span>
       <span class="tab" id="approveTab" onclick="showTab('approve')">承認</span>
+      <span class="tab" id="absentTab" onclick="showTab('absent')">欠席</span>
     </div>
     <div id="main" class="tab-content active">
       <h3 style="color:#1976d2;">生徒データ</h3>
@@ -297,6 +298,7 @@
         <thead>
           <tr>
             <th>Date</th>
+            <th>Number</th>
             <th>Name</th>
           </tr>
         </thead>
@@ -314,6 +316,7 @@
         <thead>
           <tr>
             <th>Date</th>
+            <th>Number</th>
             <th>Name</th>
             <th>Reason</th>
           </tr>
@@ -336,6 +339,20 @@
         </tbody>
       </table>
     </div>
+    <div id="absent" class="tab-content">
+      <h3 style="color:#1976d2;">欠席一覧</h3>
+      <table id="studentTable">
+        <thead>
+          <tr>
+            <th>Number</th>
+            <th>Student</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- studenturl のデータ -->
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <div id="settingsModal">
@@ -351,6 +368,7 @@
       url: "https://api.baserow.io/api/database/rows/table/685053/",
       lateurl: "https://api.baserow.io/api/database/rows/table/691308/",
       templateurl: "https://api.baserow.io/api/database/rows/table/709073/",
+      studenturl: "https://api.baserow.io/api/database/rows/table/709102/",
       token: "Token z8Du55WVQi6wmFT3Ta6diQUSUxCqx8WR"
     }
 
@@ -414,20 +432,26 @@
       fetchAndDisplay(baserow.url, 'mainTable');
       fetchAndDisplay(baserow.lateurl, 'lateTable');
       fetchApproveTemplates(); // 承認タブ用データ取得
+      // 欠席タブ用データ取得（最初に表示する場合に備えて）
+      fetchAbsentStudents();
     }
 
     function showTab(tab) {
       document.getElementById('main').classList.remove('active');
       document.getElementById('late').classList.remove('active');
       document.getElementById('approve').classList.remove('active');
+      document.getElementById('absent')?.classList.remove('active');
       document.getElementById('mainTab').classList.remove('active');
       document.getElementById('lateTab').classList.remove('active');
       document.getElementById('approveTab').classList.remove('active');
+      document.getElementById('absentTab')?.classList.remove('active');
       document.getElementById(tab).classList.add('active');
       document.getElementById(tab + 'Tab').classList.add('active');
       // 承認タブを表示したときは最新を取得
       if (tab === 'approve') {
         fetchApproveTemplates();
+      } else if (tab === 'absent') {
+        fetchAbsentStudents();
       }
     }
 
@@ -483,13 +507,13 @@
       if (tableId === 'mainTable') {
         rows.forEach(row => {
           let tr = document.createElement('tr');
-          tr.innerHTML = `<td>${row.Date || ''}</td><td>${row.Name || ''}</td>`;
+          tr.innerHTML = `<td>${row.Date || ''}</td><td>${row.Number || ''}</td><td>${row.Name || ''}</td>`;
           tbody.appendChild(tr);
         });
       } else if (tableId === 'lateTable') {
         rows.forEach(row => {
           let tr = document.createElement('tr');
-          tr.innerHTML = `<td>${row.Date || ''}</td><td>${row.Name || ''}</td><td>${row.Reason || ''}</td>`;
+          tr.innerHTML = `<td>${row.Date || ''}</td><td>${row.Number || ''}</td><td>${row.Name || ''}</td><td>${row.Reason || ''}</td>`;
           tbody.appendChild(tr);
         });
       }
@@ -706,6 +730,63 @@
         date ? new Date(date).toLocaleDateString() : '',
         name
       );
+    }
+
+    // 欠席判定：studenturl の Number から、本日 (baserow.url と baserow.lateurl の Date == 今日) に出現した Number を差し引いて表示
+    async function fetchAbsentStudents() {
+      const table = document.getElementById('studentTable');
+      const tbody = table.querySelector('tbody');
+      tbody.innerHTML = '<tr><td colspan="2" style="padding:12px">読み込み中...</td></tr>';
+      try {
+        const today = new Date().toLocaleDateString(); // 既存コードと同じフォーマットを使用
+
+        // 今日の main と late の Number を取得
+        const [mainRes, lateRes] = await Promise.all([
+          fetch(baserow.url + '?user_field_names=true&filter__Date__equal=' + encodeURIComponent(today), { headers: { 'Authorization': baserow.token } }),
+          fetch(baserow.lateurl + '?user_field_names=true&filter__Date__equal=' + encodeURIComponent(today), { headers: { 'Authorization': baserow.token } })
+        ]);
+        const mainJson = await mainRes.json();
+        const lateJson = await lateRes.json();
+        const todaysNumbers = new Set();
+        (mainJson.results || []).forEach(r => { if (r.Number != null) todaysNumbers.add(String(r.Number)); });
+        (lateJson.results || []).forEach(r => { if (r.Number != null) todaysNumbers.add(String(r.Number)); });
+
+        // 全 student を取得して、今日出ている番号を除外
+        const stuRes = await fetch(baserow.studenturl + '?user_field_names=true', { headers: { 'Authorization': baserow.token } });
+        const stuJson = await stuRes.json();
+        let rows = stuJson.results || [];
+        rows = rows.filter(r => !todaysNumbers.has(String(r.Number)));
+
+        // Number 降順で表示
+        rows.sort((a, b) => {
+          const na = Number(a.Number);
+          const nb = Number(b.Number);
+          if (isNaN(na) && isNaN(nb)) return 0;
+          if (isNaN(na)) return 1;
+          if (isNaN(nb)) return -1;
+          return nb - na;
+        });
+
+        if (rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="2" style="padding:12px">欠席者はいません</td></tr>';
+          return;
+        }
+        tbody.innerHTML = '';
+        rows.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${row.Number ?? ''}</td><td>${row.Student ?? ''}</td>`;
+          tbody.appendChild(tr);
+        });
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="2" style="padding:12px">取得エラー: ${e.message}</td></tr>`;
+        console.error(e);
+      }
+    }
+
+    async function studentSearch() {
+      const number = document.getElementById('absentDate').value; // 既存UIを流用しているため input id は absentDate のまま
+      const student = document.getElementById('absentName').value;
+      await fetchStudents(number ? new Date(number).toLocaleDateString() : number, student);
     }
 
     // 設定モーダル表示・非表示
