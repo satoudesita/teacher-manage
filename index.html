@@ -282,9 +282,11 @@
 
   <div id="mainContent" style="display:none;">
     <button class="settings-btn" onclick="openSettings()" title="設定">&#9881;</button>
+    <div id="loggedInTeacherDisplay" style="text-align:center; color:#1976d2; font-size:18px; font-weight:600; margin-bottom:10px;"></div>
     <div style="margin-bottom: 18px;">
       <span class="tab active" id="mainTab" onclick="showTab('main')">生徒データ</span>
       <span class="tab" id="lateTab" onclick="showTab('late')">遅刻データ</span>
+      <span class="tab" id="approveTab" onclick="showTab('approve')">承認</span>
     </div>
     <div id="main" class="tab-content active">
       <h3 style="color:#1976d2;">生徒データ</h3>
@@ -321,6 +323,19 @@
         </tbody>
       </table>
     </div>
+
+    <div id="approve" class="tab-content">
+      <h3 style="color:#1976d2;">承認テンプレート一覧</h3>
+      <p style="text-align:center; margin-bottom:8px;"><button onclick="refreshApprove()" style="width:auto; padding:8px 14px; border-radius:6px; background:#1976d2; color:#fff; border:none;">更新</button></p>
+      <table id="approveTable">
+        <thead>
+          <!-- 動的に作成 -->
+        </thead>
+        <tbody>
+          <!-- テンプレート行が入る -->
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <div id="settingsModal">
@@ -335,6 +350,7 @@
     const baserow = {
       url: "https://api.baserow.io/api/database/rows/table/685053/",
       lateurl: "https://api.baserow.io/api/database/rows/table/691308/",
+      templateurl: "https://api.baserow.io/api/database/rows/table/709073/",
       token: "Token z8Du55WVQi6wmFT3Ta6diQUSUxCqx8WR"
     }
 
@@ -392,17 +408,52 @@
     function showMainContent() {
       document.getElementById("loginScreen").style.display = "none";
       document.getElementById("mainContent").style.display = "block";
+      // ログイン中のユーザー名表示
+      const teacher = localStorage.getItem("loggedInTeacher");
+      document.getElementById("loggedInTeacherDisplay").textContent = teacher ? `ログイン中: ${teacher}` : "";
       fetchAndDisplay(baserow.url, 'mainTable');
       fetchAndDisplay(baserow.lateurl, 'lateTable');
+      fetchApproveTemplates(); // 承認タブ用データ取得
     }
 
     function showTab(tab) {
       document.getElementById('main').classList.remove('active');
       document.getElementById('late').classList.remove('active');
+      document.getElementById('approve').classList.remove('active');
       document.getElementById('mainTab').classList.remove('active');
       document.getElementById('lateTab').classList.remove('active');
+      document.getElementById('approveTab').classList.remove('active');
       document.getElementById(tab).classList.add('active');
       document.getElementById(tab + 'Tab').classList.add('active');
+      // 承認タブを表示したときは最新を取得
+      if (tab === 'approve') {
+        fetchApproveTemplates();
+      }
+    }
+
+    /**
+     * 日付文字列/オブジェクトを解釈してタイムスタンプを返す（不正は NaN）
+     * Baserow のフィールドがオブジェクトの場合も多少考慮
+     */
+    function parseDateValue(v) {
+      if (!v) return NaN;
+      if (typeof v === 'object') {
+        // よくあるプロパティを試す
+        const cand = v.value || v.date || v.start || v.toString();
+        return new Date(cand).getTime();
+      }
+      return new Date(v).getTime();
+    }
+
+    function sortRowsByDateDesc(rows, field = 'Date') {
+      return rows.sort((a, b) => {
+        const ta = parseDateValue(a[field]);
+        const tb = parseDateValue(b[field]);
+        if (isNaN(ta) && isNaN(tb)) return 0;
+        if (isNaN(ta)) return 1; // 日付が無いものは下に
+        if (isNaN(tb)) return -1;
+        return tb - ta; // 降順（新しいものを上）
+      });
     }
 
     async function fetchAndDisplay(url, tableId, date = '', name = '') {
@@ -422,6 +473,10 @@
       });
       let json = await res.json();
       let rows = json.results || [];
+
+      // 日付で降順ソート
+      rows = sortRowsByDateDesc(rows, 'Date');
+
       let tbody = document.querySelector(`#${tableId} tbody`);
       tbody.innerHTML = '';
       // 表のカラムに合わせて表示
@@ -438,6 +493,196 @@
           tbody.appendChild(tr);
         });
       }
+    }
+
+    // 承認テンプレート取得・表示（Nameの横に承認ボタンと削除ボタンを表示）
+    async function fetchApproveTemplates() {
+      const table = document.getElementById('approveTable');
+      const thead = table.querySelector('thead');
+      const tbody = table.querySelector('tbody');
+      thead.innerHTML = '';
+      tbody.innerHTML = '<tr><td colspan="4" style="padding:12px">読み込み中...</td></tr>';
+
+      try {
+        const res = await fetch(baserow.templateurl + '?user_field_names=true', {
+          method: 'GET',
+          headers: {
+            'Authorization': baserow.token,
+            'Content-Type': 'application/json'
+          }
+        });
+        const json = await res.json();
+        let rows = json.results || [];
+
+        // 日付で降順ソート
+        rows = sortRowsByDateDesc(rows, 'Date');
+
+        if (rows.length === 0) {
+          thead.innerHTML = '';
+          tbody.innerHTML = '<tr><td colspan="4" style="padding:12px">データがありません</td></tr>';
+          return;
+        }
+
+        // ヘッダーを rows[0] のキーから動的に作る（idは非表示）
+        const keys = Object.keys(rows[0]).filter(k => k !== 'id' && k !== 'order');
+        const nameIndex = keys.indexOf('Name');
+        const headerCells = [];
+        keys.forEach((k, i) => {
+          headerCells.push(`<th>${k}</th>`);
+          if (i === nameIndex) headerCells.push(`<th>操作</th>`);
+        });
+        thead.innerHTML = '<tr>' + headerCells.join('') + '</tr>';
+
+        tbody.innerHTML = '';
+        rows.forEach(row => {
+          const tr = document.createElement('tr');
+          const cells = [];
+          keys.forEach((k, i) => {
+            const v = row[k];
+            const text = (v && typeof v === 'object') ? JSON.stringify(v) : (v ?? '');
+            cells.push(`<td>${text}</td>`);
+            if (i === nameIndex) {
+              cells.push(`<td data-approve-for="${row.id}"></td>`);
+            }
+          });
+
+          tr.innerHTML = cells.join('');
+          tbody.appendChild(tr);
+
+          const buttonCell = tr.querySelector(`td[data-approve-for="${row.id}"]`);
+          if (buttonCell) {
+            // コンテナ作成（承認 + 削除）
+            const container = document.createElement('div');
+            container.style.display = 'flex';
+            container.style.gap = '8px';
+            container.style.justifyContent = 'center';
+
+            // 承認ボタン
+            const approveBtn = document.createElement('button');
+            approveBtn.textContent = '承認';
+            approveBtn.style.padding = '6px 10px';
+            approveBtn.style.borderRadius = '6px';
+            approveBtn.style.background = '#66bb6a';
+            approveBtn.style.color = '#fff';
+            approveBtn.style.border = 'none';
+            approveBtn.style.cursor = 'pointer';
+            approveBtn.style.minWidth = '64px';
+            approveBtn.onclick = () => approveTemplate(row.id, row, approveBtn, keys);
+
+            // 削除ボタン
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = '否認';
+            deleteBtn.style.padding = '6px 10px';
+            deleteBtn.style.borderRadius = '6px';
+            deleteBtn.style.background = '#ef5350';
+            deleteBtn.style.color = '#fff';
+            deleteBtn.style.border = 'none';
+            deleteBtn.style.cursor = 'pointer';
+            deleteBtn.style.minWidth = '64px';
+            deleteBtn.onclick = () => deleteTemplate(row.id, deleteBtn);
+
+            container.appendChild(approveBtn);
+            container.appendChild(deleteBtn);
+            buttonCell.appendChild(container);
+          }
+        });
+      } catch (e) {
+        thead.innerHTML = '';
+        tbody.innerHTML = `<tr><td colspan="4" style="padding:12px">取得エラー: ${e.message}</td></tr>`;
+        console.error(e);
+      }
+    }
+
+    // 承認処理：templateの行をlateテーブルに追加して、template側の行を削除する
+    async function approveTemplate(rowId, rowData, btn, keys) {
+      if (!confirm('このテンプレートを遅刻データに移動してよいですか？')) return;
+
+      try {
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = '承認中...';
+
+        // POST 用ペイロード作成（id/orderは除外）
+        const payload = {};
+        keys.forEach(k => {
+          if (k === 'id' || k === 'order') return;
+          payload[k] = rowData[k];
+        });
+
+        // 1) late テーブルへ追加
+        const postRes = await fetch(baserow.lateurl + '?user_field_names=true', {
+          method: 'POST',
+          headers: {
+            'Authorization': baserow.token,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!postRes.ok) {
+          const errText = await postRes.text();
+          throw new Error('追加失敗: ' + postRes.status + ' ' + errText);
+        }
+
+        // 2) template の元行を削除
+        const delRes = await fetch(baserow.templateurl + rowId + '/', {
+          method: 'DELETE',
+          headers: {
+            'Authorization': baserow.token,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!delRes.ok) {
+          const errText = await delRes.text();
+          throw new Error('削除失敗: ' + delRes.status + ' ' + errText);
+        }
+
+        // UI 更新
+        await fetchApproveTemplates();
+        await fetchAndDisplay(baserow.lateurl, 'lateTable');
+        alert('承認して移動しました。');
+      } catch (e) {
+        console.error(e);
+        alert('承認エラー: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = '承認';
+      }
+    }
+
+    // 削除処理：templateテーブルの行を削除（復元不可）
+    async function deleteTemplate(rowId, btn) {
+      if (!confirm('このテンプレートを削除してよいですか？（復元できません）')) return;
+      try {
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = '削除中...';
+
+        const delRes = await fetch(baserow.templateurl + rowId + '/', {
+          method: 'DELETE',
+          headers: {
+            'Authorization': baserow.token,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!delRes.ok) {
+          const errText = await delRes.text();
+          throw new Error('削除失敗: ' + delRes.status + ' ' + errText);
+        }
+
+        await fetchApproveTemplates();
+        alert('テンプレートを削除しました。');
+      } catch (e) {
+        console.error(e);
+        alert('削除エラー: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = '否認';
+      }
+    }
+
+    function refreshApprove() {
+      fetchApproveTemplates();
     }
 
     // 検索ボタン用
