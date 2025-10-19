@@ -359,6 +359,7 @@
     <div class="modal-content">
       <h3>設定</h3>
       <button id="logoutBtn" onclick="teacherLogout()">ログアウト</button>
+      <button id="deleteAccountBtn" onclick="teacherDeleteAccount()" style="background:#e53935;color:#fff;border:none;border-radius:8px;padding:12px 0;cursor:pointer;margin-top:8px;width:100%;">アカウント削除</button>
       <button onclick="closeSettings()">閉じる</button>
     </div>
   </div>
@@ -369,6 +370,7 @@
       lateurl: "https://api.baserow.io/api/database/rows/table/691308/",
       templateurl: "https://api.baserow.io/api/database/rows/table/709073/",
       studenturl: "https://api.baserow.io/api/database/rows/table/709102/",
+      teacherdataurl: "https://api.baserow.io/api/database/rows/table/709970/",
       token: "Token z8Du55WVQi6wmFT3Ta6diQUSUxCqx8WR"
     }
 
@@ -388,29 +390,128 @@
     }
 
     async function teacherRegister() {
-      const newTeacher = document.getElementById("newTeacherUsername").value;
+      const newTeacher = document.getElementById("newTeacherUsername").value.trim();
       const newPass = document.getElementById("newTeacherPassword").value;
-      const teachers = getTeachers();
-      if (teachers[newTeacher]) {
-        document.getElementById("loginResult").textContent = "すでに登録されています";
+      const resultEl = document.getElementById("loginResult");
+      if (!newTeacher || !newPass) {
+        resultEl.textContent = "ユーザー名とパスワードを入力してください";
         return;
       }
-      const hashed = await hashPassword(newPass);
-      teachers[newTeacher] = hashed;
-      saveTeachers(teachers);
-      document.getElementById("loginResult").textContent = "先生登録完了";
+      try {
+        // 重複チェック（ページネーション対応・大文字小文字を無視）
+        const normalized = newTeacher.toLowerCase();
+        let nextUrl = baserow.teacherdataurl + '?user_field_names=true&page_size=200';
+        let exists = false;
+        while (nextUrl) {
+          const chkRes = await fetch(nextUrl, {
+            method: 'GET',
+            headers: { 'Authorization': baserow.token }
+          });
+          if (!chkRes.ok) {
+            const errText = await chkRes.text();
+            throw new Error('既存チェック失敗: ' + chkRes.status + ' ' + errText);
+          }
+          const chkJson = await chkRes.json();
+          const rows = chkJson.results || [];
+          if (rows.some(r => {
+            const name = (r.Name ?? '').toString().trim().toLowerCase();
+            return name === normalized;
+          })) {
+            exists = true;
+            break;
+          }
+          nextUrl = chkJson.next || null;
+        }
+
+        if (exists) {
+          resultEl.textContent = "すでに登録されています";
+          return;
+        }
+
+        const hashed = await hashPassword(newPass);
+        const payload = { Name: newTeacher, Password: hashed };
+
+        const postRes = await fetch(baserow.teacherdataurl + '?user_field_names=true', {
+          method: 'POST',
+          headers: { 'Authorization': baserow.token, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!postRes.ok) {
+          const errText = await postRes.text();
+          throw new Error('登録失敗: ' + postRes.status + ' ' + errText);
+        }
+
+        resultEl.textContent = "先生登録完了";
+        document.getElementById("newTeacherUsername").value = '';
+        document.getElementById("newTeacherPassword").value = '';
+      } catch (e) {
+        console.error(e);
+        resultEl.textContent = "登録エラー: " + (e.message || e);
+      }
     }
 
     async function teacherLogin() {
-      const username = document.getElementById("teacherUsername").value;
+      const username = document.getElementById("teacherUsername").value.trim();
       const password = document.getElementById("teacherPassword").value;
-      const teachers = getTeachers();
-      const hashed = await hashPassword(password);
-      if (teachers[username] && teachers[username] === hashed) {
-        localStorage.setItem("loggedInTeacher", username);
+      const resultEl = document.getElementById("loginResult");
+      if (!username || !password) {
+        resultEl.textContent = "ユーザー名とパスワードを入力してください";
+        return;
+      }
+      try {
+        const normalized = username.toLowerCase();
+        let nextUrl = baserow.teacherdataurl + '?user_field_names=true&page_size=200';
+        let foundRow = null;
+
+        // ページネーション対応で Name を大文字小文字無視で検索
+        while (nextUrl) {
+          const res = await fetch(nextUrl, {
+            method: 'GET',
+            headers: { 'Authorization': baserow.token }
+          });
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error('取得失敗: ' + res.status + ' ' + errText);
+          }
+          const json = await res.json();
+          const rows = json.results || [];
+          for (const r of rows) {
+            const name = (r.Name ?? '').toString().trim().toLowerCase();
+            if (name === normalized) {
+              // Name が一致する行を見つける（複数あれば最初に合致したものを使用）
+              foundRow = r;
+              break;
+            }
+          }
+          if (foundRow) break;
+          nextUrl = json.next || null;
+        }
+
+        if (!foundRow) {
+          resultEl.textContent = "ユーザー名またはパスワードが違います";
+          return;
+        }
+
+        const hashed = await hashPassword(password);
+        let stored = foundRow.Password ?? '';
+        if (typeof stored === 'object') {
+          stored = stored.value || stored.Password || (stored.hash || JSON.stringify(stored));
+        }
+        // パスワード照合。一致しなければログイン不可
+        if (stored !== hashed) {
+          resultEl.textContent = "ユーザー名またはパスワードが違います";
+          return;
+        }
+
+        // 成功：ログイン保存・メイン表示
+        // 表示名は Baserow にある Name を優先して保存する
+        const displayName = (foundRow.Name ?? username);
+        localStorage.setItem("loggedInTeacher", displayName);
         showMainContent();
-      } else {
-        document.getElementById("loginResult").textContent = "ユーザー名またはパスワードが違います";
+      } catch (e) {
+        console.error(e);
+        resultEl.textContent = "ログインエラー: " + (e.message || e);
       }
     }
 
@@ -420,6 +521,61 @@
         document.getElementById("mainContent").style.display = "none";
         document.getElementById("settingsModal").style.display = "none";
         document.getElementById("loginScreen").style.display = "block";
+      }
+    }
+
+    // アカウント削除：ログイン中のユーザー名を基に baserow 上の該当行(Name) を全件削除し、クライアント側データを消す
+    async function teacherDeleteAccount() {
+      const teacher = localStorage.getItem("loggedInTeacher");
+      if (!teacher) {
+        alert('ログインしていません');
+        return;
+      }
+      if (!confirm('本当にアカウントを削除しますか？')) return;
+      try {
+        const normalized = teacher.toLowerCase();
+        let nextUrl = baserow.teacherdataurl + '?user_field_names=true&page_size=200';
+        let deletedAny = false;
+        while (nextUrl) {
+          const res = await fetch(nextUrl, { method: 'GET', headers: { 'Authorization': baserow.token } });
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error('取得失敗: ' + res.status + ' ' + errText);
+          }
+          const json = await res.json();
+          const rows = json.results || [];
+          for (const r of rows) {
+            const name = (r.Name ?? '').toString().trim().toLowerCase();
+            if (name === normalized) {
+              const delRes = await fetch(baserow.teacherdataurl + r.id + '/', {
+                method: 'DELETE',
+                headers: { 'Authorization': baserow.token, 'Content-Type': 'application/json' }
+              });
+              if (!delRes.ok) {
+                const dt = await delRes.text();
+                throw new Error('削除失敗: ' + delRes.status + ' ' + dt);
+              }
+              deletedAny = true;
+            }
+          }
+          nextUrl = json.next || null;
+        }
+
+        // クライアント側データの削除・UI戻し
+        localStorage.removeItem("loggedInTeacher");
+        localStorage.removeItem("TEACHERS");
+        document.getElementById("mainContent").style.display = "none";
+        document.getElementById("settingsModal").style.display = "none";
+        document.getElementById("loginScreen").style.display = "block";
+
+        if (deletedAny) {
+          alert('アカウントを削除しました。');
+        } else {
+          alert('Baserow 上に該当アカウントは見つかりませんでしたが、ログアウトしました。');
+        }
+      } catch (e) {
+        console.error(e);
+        alert('アカウント削除エラー: ' + (e.message || e));
       }
     }
 
@@ -809,3 +965,4 @@
 </body>
 
 </html>
+
