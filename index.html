@@ -316,6 +316,7 @@
         <thead>
           <tr>
             <th>Date</th>
+            <th>Time</th>
             <th>Number</th>
             <th>Name</th>
             <th>Reason</th>
@@ -625,6 +626,15 @@
       return new Date(v).getTime();
     }
 
+    // 任意フィールドを表示用文字列に変換
+    function displayField(v) {
+      if (v === null || v === undefined) return '';
+      if (typeof v === 'object') {
+        return v.value ?? v.Time ?? v.time ?? v.toString() ?? JSON.stringify(v);
+      }
+      return String(v);
+    }
+
     function sortRowsByDateDesc(rows, field = 'Date') {
       return rows.sort((a, b) => {
         const ta = parseDateValue(a[field]);
@@ -669,7 +679,12 @@
       } else if (tableId === 'lateTable') {
         rows.forEach(row => {
           let tr = document.createElement('tr');
-          tr.innerHTML = `<td>${row.Date || ''}</td><td>${row.Number || ''}</td><td>${row.Name || ''}</td><td>${row.Reason || ''}</td>`;
+          const dateText = displayField(row.Date);
+          const timeText = displayField(row.Time);
+          const numberText = displayField(row.Number);
+          const nameText = displayField(row.Name);
+          const reasonText = displayField(row.Reason);
+          tr.innerHTML = `<td>${dateText}</td><td>${timeText}</td><td>${numberText}</td><td>${nameText}</td><td>${reasonText}</td>`;
           tbody.appendChild(tr);
         });
       }
@@ -965,4 +980,6 @@
 </body>
 
 </html>
+
+
 
